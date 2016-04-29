@@ -3,12 +3,11 @@
             [om.next :as om :refer-macros [defui]]
             [routom.core :as r]
             [routom.bidi :as rb]
-            [bidi.router :as br]
             [om.dom :as dom]))
 
 (enable-console-print!)
 
-(declare set-location!)
+(declare history bidi-router)
 
 (defui Login
   static r/IRootQuery
@@ -23,7 +22,7 @@
       (dom/input #js {:type "text"})
       (dom/label nil "Password")
       (dom/input #js {:type "password"})
-      (dom/button #js {:onClick #(set-location! :home {})} "Submit"))))
+      (dom/button #js {:onClick #(.push history (rb/path-for bidi-router :home {}))} "Submit"))))
 
 (defui NavBar
   static om/IQuery
@@ -35,15 +34,15 @@
       (dom/div nil
         (dom/h1 nil title)
         (dom/button
-          #js {:onClick #(set-location! :home {})}
+          #js {:onClick #(.push history (rb/path-for bidi-router :home {}))}
           "Home")
         (dom/button
-          #js {:onClick #(set-location! :about {})}
+          #js {:onClick #(.push history (rb/path-for bidi-router :about {}))}
           "About")
         (dom/button
-          #js {:onClick #(set-location! :user {:user/id "1"})}
+          #js {:onClick #(.push history (rb/path-for bidi-router :user {:user/id "1"}))}
           "User")
-        (om/children this)))))
+        (r/render-subroute this)))))
 
 (defui About
   static om/IQuery
@@ -96,16 +95,9 @@
 (def set-route! (:set-route! router))
 (def AppRoot (:root-class router))
 
+(def history ((js/window.History.useQueries js/window.History.createHashHistory)))
 
-(def bidi-routes (rb/routes->bidi-route @routes))
-(def bidi-router (br/start-router!
-                   bidi-routes
-                   {:default-location {:handler :home :route-params {}}
-                    :on-navigate #(set-route! {:route/id (:handler %) :route/params (:route-params %)})}))
-
-(defn set-location!
-  [route-id route-params]
-  (br/set-location! bidi-router {:handler route-id :route-params route-params}))
+(def bidi-router (rb/start-bidi-router! history set-route! routes {:route/id :home :route/params {}}))
 
 (def app-state
   (atom
@@ -135,6 +127,8 @@
 (def reconciler
   (om/reconciler
     {:state app-state
+      :ui->props (:ui->props router)
+      :shared {:bidi-router bidi-router :history history}
       :parser (om/parser {:read read})}))
 
 
